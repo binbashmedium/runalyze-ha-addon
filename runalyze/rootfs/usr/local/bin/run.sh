@@ -5,6 +5,7 @@ CONFIG_PATH=/data/options.json
 MYSQL_DATA=/data/mysql
 INIT_MARKER=/data/.runalyze_db_initialized
 RUNALYZE_DIR=/var/www/runalyze
+APACHE_PORT=8099
 
 DB_NAME="runalyze"
 DB_USER="runalyze"
@@ -67,12 +68,8 @@ else
   echo "MariaDB was already initialized, keeping existing database and users."
 fi
 
-if [ -d "${RUNALYZE_DIR}/var" ]; then
-  chown -R www-data:www-data "${RUNALYZE_DIR}/var"
-fi
-if [ -d "${RUNALYZE_DIR}/data" ]; then
-  chown -R www-data:www-data "${RUNALYZE_DIR}/data"
-fi
+mkdir -p "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/var" "${RUNALYZE_DIR}/web/uploads"
+chown -R www-data:www-data "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/var" "${RUNALYZE_DIR}/web/uploads"
 
 cat >/data/database.txt <<EOF
 Database host: 127.0.0.1
@@ -84,10 +81,28 @@ EOF
 chmod 600 /data/database.txt
 
 echo "RUNALYZE database settings written to /data/database.txt"
-echo "Open the add-on web UI and use these settings in the RUNALYZE installer if prompted."
+echo "Starting Apache on port ${APACHE_PORT}"
 
 apache2ctl -D FOREGROUND &
 APACHE_PID=$!
+
+for i in $(seq 1 30); do
+  if curl -fsS "http://127.0.0.1:${APACHE_PORT}/" >/tmp/runalyze-healthcheck.html 2>/tmp/runalyze-healthcheck.err; then
+    echo "RUNALYZE web server is reachable on port ${APACHE_PORT}"
+    break
+  fi
+  if ! kill -0 "${APACHE_PID}" 2>/dev/null; then
+    echo "Apache stopped unexpectedly" >&2
+    cat /tmp/runalyze-healthcheck.err 2>/dev/null || true
+    exit 1
+  fi
+  sleep 1
+  if [ "$i" = "30" ]; then
+    echo "Apache is running, but RUNALYZE did not return HTTP 2xx within 30 seconds." >&2
+    echo "Last healthcheck error:" >&2
+    cat /tmp/runalyze-healthcheck.err 2>/dev/null || true
+  fi
+done
 
 trap 'apache2ctl stop || true; mariadb-admin --socket=/run/mysqld/mysqld.sock -uroot -p"${DB_ROOT_PASSWORD}" shutdown || true; kill ${MYSQL_PID} || true' TERM INT
 wait "${APACHE_PID}"

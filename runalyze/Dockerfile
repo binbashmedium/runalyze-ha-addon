@@ -1,7 +1,7 @@
 FROM php:7.4-apache-bullseye
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.1
+ARG BUILD_VERSION=0.1.2
 ARG RUNALYZE_REF=support/4.3.x
 
 LABEL \
@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype6-dev \
     libicu-dev \
     libjpeg62-turbo-dev \
+    libonig-dev \
     libpng-dev \
     libxml2-dev \
     libzip-dev \
@@ -37,15 +38,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     zip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) curl gd intl mbstring mysqli pdo_mysql xml zip \
-    && rm -rf /var/lib/apt/lists/*
+    && docker-php-ext-install -j$(nproc) curl gd intl mbstring mysqli pdo_mysql xml zip
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
 RUN git clone --depth 1 --branch "${RUNALYZE_REF}" https://github.com/Runalyze/Runalyze.git "${RUNALYZE_DIR}" \
     && cd "${RUNALYZE_DIR}" \
     && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts \
-    && rm -rf "${RUNALYZE_DIR}/.git" /root/.composer /tmp/* \
     && chown -R www-data:www-data "${RUNALYZE_DIR}"
 
 COPY rootfs /

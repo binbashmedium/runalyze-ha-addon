@@ -1,8 +1,8 @@
-name: "RUNALYZE Server"
-version: "0.1.14"
-slug: "runalyze"
-description: "Self-hosted RUNALYZE Open Source server for Home Assistant"
-url: "https://github.com/binbashmedium/runalyze-ha-addon"
+name: RUNALYZE Server
+version: 0.1.15
+slug: runalyze
+description: Self-hosted RUNALYZE Open Source server for Home Assistant
+url: https://github.com/binbashmedium/runalyze-ha-addon
 arch:
   - amd64
   - aarch64
@@ -16,11 +16,11 @@ ingress: true
 ingress_port: 8099
 panel_icon: mdi:run-fast
 panel_title: RUNALYZE
-webui: "http://[HOST]:[PORT:8099]/"
+webui: http://[HOST]:[PORT:8099]/
 ports:
   8099/tcp: 8099
 ports_description:
-  8099/tcp: "RUNALYZE web interface"
+  8099/tcp: RUNALYZE web interface
 options:
   db_use_supervisor_service: false
   db_host: core-mariadb
@@ -38,5 +38,5 @@ schema:
   db_password: password
   db_create: bool
 backup: cold
-watchdog: "http://[HOST]:[PORT:8099]/"
+watchdog: http://[HOST]:[PORT:8099]/
 build: .

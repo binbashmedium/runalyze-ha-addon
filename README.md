@@ -1,1 +1,48 @@
-# runalyze-ha-addon
+# RUNALYZE Home Assistant Add-on Repository
+
+Dieses Repository enthält ein Home-Assistant-Add-on für einen lokalen RUNALYZE Open-Source-Server.
+
+## Installation über Home Assistant
+
+1. Öffne Home Assistant.
+2. Gehe zu **Einstellungen → Add-ons → Add-on Store**.
+3. Öffne oben rechts **⋮ → Repositories**.
+4. Füge dieses Repository hinzu:
+
+   `https://github.com/binbashmedium/runalyze-ha-addon`
+
+5. Lade den Add-on-Store neu.
+6. Installiere **RUNALYZE Server**.
+7. Setze vor dem ersten Start sichere Datenbank-Passwörter in der Add-on-Konfiguration.
+8. Starte das Add-on und öffne die Web UI.
+
+## Datenbankdaten
+
+Das Add-on startet MariaDB im selben Container und legt die Daten unter `/data/mysql` ab. Home Assistant sichert `/data` im Add-on-Backup.
+
+Die verwendeten Datenbankdaten stehen nach dem Start zusätzlich in `/data/database.txt` im Add-on-Container.
+
+Standardwerte:
+
+| Feld | Wert |
+|---|---|
+| Host | `127.0.0.1` |
+| Port | `3306` |
+| Datenbank | `runalyze` |
+| Benutzer | `runalyze` |
+
+## Hinweis zur RUNALYZE-Version
+
+Das Add-on verwendet die archivierte Open-Source-Version aus dem Branch `support/4.3.x` des RUNALYZE-Projekts. Der heutige RUNALYZE-Dienst ist nicht identisch mit dieser archivierten Self-hosted-Version.
+
+## Repository-Struktur
+
+```text
+repository.yaml
+runalyze/
+  config.yaml
+  Dockerfile
+  rootfs/
+    etc/apache2/sites-available/runalyze.conf
+    usr/local/bin/run.sh
+```

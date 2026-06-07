@@ -14,6 +14,10 @@ DB_PASSWORD=""
 DB_CREATE="false"
 DB_USE_SUPERVISOR_SERVICE="true"
 
+mkdir -p /run/apache2 "${TMP_DIR}" "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var/cache" "${RUNALYZE_DIR}/var/logs" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
+chmod 1777 /tmp "${TMP_DIR}"
+chown -R www-data:www-data "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
+
 json_value() {
   local key="$1"
   local fallback="$2"
@@ -36,7 +40,12 @@ if [ -f "${CONFIG_PATH}" ]; then
   DB_USE_SUPERVISOR_SERVICE="$(json_value db_use_supervisor_service "${DB_USE_SUPERVISOR_SERVICE}")"
 fi
 
-if [ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ] && [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+if [ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ]; then
+  if [ -z "${SUPERVISOR_TOKEN:-}" ]; then
+    echo "db_use_supervisor_service is true, but SUPERVISOR_TOKEN is not available. Check hassio_api: true in config.yaml." >&2
+    exit 1
+  fi
+
   echo "Reading MySQL service credentials from Home Assistant Supervisor"
   if curl -fsS -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" -H "Content-Type: application/json" "http://supervisor/services/mysql" >"${TMP_DIR}/mysql-service.json" 2>"${TMP_DIR}/mysql-service.err"; then
     SERVICE_HOST="$(json_field "${TMP_DIR}/mysql-service.json" host)"
@@ -51,8 +60,9 @@ if [ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ] && [ -n "${SUPERVISOR_TOKEN:-}" ]
 
     echo "Using Supervisor MySQL service user '${DB_USER}' at ${DB_HOST}:${DB_PORT}"
   else
-    echo "Could not read Supervisor MySQL service credentials, falling back to configured database options." >&2
+    echo "Could not read Supervisor MySQL service credentials." >&2
     cat "${TMP_DIR}/mysql-service.err" >&2 || true
+    exit 1
   fi
 fi
 
@@ -76,10 +86,6 @@ if [ -z "${DB_PASSWORD}" ]; then
   echo "db_password is empty and no Supervisor MySQL service password was available." >&2
   exit 1
 fi
-
-mkdir -p /run/apache2 "${TMP_DIR}" "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var/cache" "${RUNALYZE_DIR}/var/logs" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
-chmod 1777 /tmp "${TMP_DIR}"
-chown -R www-data:www-data "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
 
 if [ "${DB_CREATE}" = "true" ]; then
   echo "Creating RUNALYZE database on ${DB_HOST}:${DB_PORT} with configured database user"
@@ -128,7 +134,7 @@ Database host: ${DB_HOST}
 Database port: ${DB_PORT}
 Database name: ${DB_NAME}
 Database user: ${DB_USER}
-Database password source: $([ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ] && echo "supervisor mysql service or configured fallback" || echo "configured option")
+Database password source: $([ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ] && echo "supervisor mysql service" || echo "configured option")
 EOF
 chmod 600 /data/database.txt
 

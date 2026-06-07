@@ -18,7 +18,7 @@ Dieses Repository enthält ein Home-Assistant-Add-on für einen lokalen RUNALYZE
 
 ## Externe MariaDB
 
-Version `0.1.6` verwendet keine interne MariaDB mehr. Das Add-on verbindet sich mit einer bestehenden MariaDB.
+Version `0.1.7` verwendet keine interne MariaDB mehr. Das Add-on verbindet sich mit einer bestehenden MariaDB.
 
 Beispiel für das Home-Assistant-MariaDB-Add-on:
 
@@ -29,20 +29,23 @@ db_name: runalyze
 db_user: runalyze
 db_password: change_me
 db_create: false
-db_admin_user: root
-db_admin_password: ""
 ```
 
 Wenn Datenbank und Benutzer bereits existieren, `db_create: false` verwenden.
 
-Wenn das Add-on Datenbank und Benutzer anlegen soll, `db_create: true` setzen und `db_admin_user` sowie `db_admin_password` mit einem MariaDB-Adminzugang befüllen.
+Wenn der konfigurierte `db_user` das Recht `CREATE DATABASE` hat, kann `db_create: true` gesetzt werden. Das Add-on legt dann nur die Datenbank an. Es erstellt keinen Benutzer und benötigt keinen Root-Zugang.
 
-Benötigte Rechte für den RUNALYZE-Benutzer:
+Benötigte Rechte für den RUNALYZE-Benutzer bei bereits vorhandener Datenbank:
 
 ```sql
-CREATE DATABASE runalyze CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'runalyze'@'%' IDENTIFIED BY 'change_me';
 GRANT ALL PRIVILEGES ON runalyze.* TO 'runalyze'@'%';
+FLUSH PRIVILEGES;
+```
+
+Optional, wenn der Benutzer die Datenbank selbst anlegen soll:
+
+```sql
+GRANT CREATE ON *.* TO 'runalyze'@'%';
 FLUSH PRIVILEGES;
 ```
 
@@ -52,7 +55,7 @@ Nach Änderungen im Repository:
 
 1. Add-on stoppen.
 2. In Home Assistant den Add-on-Store neu laden.
-3. **RUNALYZE Server** auf Version `0.1.6` aktualisieren oder neu bauen.
+3. **RUNALYZE Server** auf Version `0.1.7` aktualisieren oder neu bauen.
 4. Add-on starten.
 5. Im Log auf diese Meldungen prüfen:
 
@@ -61,6 +64,8 @@ Nach Änderungen im Repository:
    `RUNALYZE web server is reachable on port 8099`
 
 ## Technische Änderungen
+
+Version `0.1.7` entfernt die Root/Admin-Datenbankoptionen. `db_create` verwendet jetzt den konfigurierten `db_user`. Zusätzlich wurde ein Add-on-Icon unter `runalyze/icon.svg` hinzugefügt.
 
 Version `0.1.6` entfernt den internen MariaDB-Server aus dem Container und schreibt RUNALYZE `data/config.yml` anhand der Add-on-Datenbankoptionen.
 
@@ -83,6 +88,7 @@ repository.yaml
 runalyze/
   config.yaml
   Dockerfile
+  icon.svg
   rootfs/
     etc/apache2/sites-available/runalyze.conf
     tmp/patch-runalyze-composer.php

@@ -1,6 +1,6 @@
 # RUNALYZE Home Assistant Add-on Repository
 
-Dieses Repository enthält ein Home-Assistant-Add-on für einen lokalen RUNALYZE Open-Source-Server.
+Dieses Repository enthält ein Home-Assistant-Add-on für einen lokalen RUNALYZE-Server.
 
 ## Installation über Home Assistant
 
@@ -15,9 +15,39 @@ Dieses Repository enthält ein Home-Assistant-Add-on für einen lokalen RUNALYZE
 6. Installiere **RUNALYZE Server**.
 7. Starte das Add-on und öffne die Web UI.
 
+## RUNALYZE-Quelle
+
+Ab Version `0.1.12` wird RUNALYZE aus diesem Fork gebaut:
+
+```text
+https://github.com/codeproducer198/Runalyze.git
+```
+
+Verwendeter Branch:
+
+```text
+master
+```
+
+## Manuelle MariaDB-Konfiguration
+
+Empfohlen, wenn du einen eigenen Datenbankbenutzer angelegt hast:
+
+```yaml
+db_use_supervisor_service: false
+db_host: core-mariadb
+db_port: 3306
+db_name: runalyze
+db_user: runalyze
+db_password: change_me
+db_create: false
+```
+
+`db_create: false` verwenden, wenn die Datenbank bereits existiert.
+
 ## MariaDB über Home Assistant Supervisor
 
-Version `0.1.8` fordert den MySQL-Service beim Home-Assistant-Supervisor an:
+Optional kann der MySQL-Service beim Home-Assistant-Supervisor angefordert werden:
 
 ```yaml
 hassio_api: true
@@ -25,35 +55,13 @@ services:
   - mysql:need
 ```
 
-Dadurch holt das Add-on Host, Port, Benutzer und Passwort automatisch vom Supervisor, so wie andere Add-ons mit MariaDB-Servicebindung. Die Add-on-Optionen dienen als Fallback oder zur Auswahl der Datenbank.
-
-Empfohlene Konfiguration:
+Dafür muss gesetzt sein:
 
 ```yaml
 db_use_supervisor_service: true
-db_host: core-mariadb
-db_port: 3306
-db_name: runalyze
-db_user: service
-db_password: ""
-db_create: false
 ```
 
-Wenn `db_use_supervisor_service: true` gesetzt ist, kann `db_password` leer bleiben. Das Passwort kommt dann vom Supervisor-Service.
-
-## Manuelle MariaDB-Konfiguration
-
-Nur verwenden, wenn keine Supervisor-Servicebindung genutzt werden soll:
-
-```yaml
-db_use_supervisor_service: false
-db_host: core-mariadb
-db_port: 3306
-db_name: runalyze
-db_user: service
-db_password: change_me
-db_create: false
-```
+Dann überschreibt der Supervisor Host, Port, Benutzer und Passwort. Das ist nicht geeignet, wenn ein manuell angelegter Benutzer verwendet werden soll.
 
 ## Update auf neue Version
 
@@ -61,13 +69,11 @@ Nach Änderungen im Repository:
 
 1. Add-on stoppen.
 2. In Home Assistant den Add-on-Store neu laden.
-3. **RUNALYZE Server** auf Version `0.1.8` aktualisieren oder neu bauen.
+3. **RUNALYZE Server** auf Version `0.1.12` aktualisieren oder neu bauen.
 4. Add-on starten.
 5. Im Log auf diese Meldungen prüfen:
 
-   `Reading MySQL service credentials from Home Assistant Supervisor`
-
-   `Using Supervisor MySQL service user ...`
+   `Using configured database user ...`
 
    `External MariaDB connection OK`
 
@@ -75,23 +81,19 @@ Nach Änderungen im Repository:
 
 ## Technische Änderungen
 
-Version `0.1.8` ergänzt `hassio_api: true`, `services: mysql:need` und liest die MySQL-Zugangsdaten über den Supervisor-Service-Endpunkt. Damit muss das MariaDB-Servicepasswort nicht mehr manuell eingetragen werden.
+Version `0.1.12` stellt die RUNALYZE-Quelle auf `https://github.com/codeproducer198/Runalyze.git`, Branch `master`, um und entfernt die bisherige Upstream-Patch-Installation aus dem Dockerfile.
+
+Version `0.1.11` ergänzt detailliertes HTTP-500-Logging für die RUNALYZE-Fehlerseite.
+
+Version `0.1.10` installiert die PHP-Erweiterung `gettext`.
+
+Version `0.1.9` verwendet manuelle DB-Zugangsdaten standardmäßig vor Supervisor-Zugangsdaten.
+
+Version `0.1.8` ergänzt `hassio_api: true`, `services: mysql:need` und liest die MySQL-Zugangsdaten über den Supervisor-Service-Endpunkt.
 
 Version `0.1.7` entfernt die Root/Admin-Datenbankoptionen. `db_create` verwendet den konfigurierten `db_user`. Zusätzlich wurde ein Add-on-Icon unter `runalyze/icon.svg` hinzugefügt.
 
 Version `0.1.6` entfernt den internen MariaDB-Server aus dem Container und schreibt RUNALYZE `data/config.yml` anhand der Add-on-Datenbankoptionen.
-
-Version `0.1.5` verwendet Composer 2 mit normalisierten Legacy-Paketnamen und PicoFeed-Patch.
-
-Version `0.1.4` ersetzt das nicht mehr abrufbare `miniflux/picofeed` durch einen kompatiblen Fork.
-
-Version `0.1.2` ergänzt `libonig-dev`, damit die PHP-Erweiterung `mbstring` erfolgreich gebaut werden kann.
-
-Version `0.1.1` verwendet PHP 7.4 statt Debian Bookworm PHP, installiert Composer-Abhängigkeiten beim Image-Build, setzt Apache explizit auf Port `8099`, richtet `ingress_port: 8099` ein und schreibt PHP/Apache-Fehler direkt ins Add-on-Log.
-
-## Hinweis zur RUNALYZE-Version
-
-Das Add-on verwendet die archivierte Open-Source-Version aus dem Branch `support/4.3.x` des RUNALYZE-Projekts. Der heutige RUNALYZE-Dienst ist nicht identisch mit dieser archivierten Self-hosted-Version.
 
 ## Repository-Struktur
 

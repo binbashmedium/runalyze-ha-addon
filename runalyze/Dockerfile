@@ -1,7 +1,7 @@
 FROM php:7.4-apache-bullseye
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.12
+ARG BUILD_VERSION=0.1.13
 ARG RUNALYZE_REPOSITORY=https://github.com/codeproducer198/Runalyze.git
 ARG RUNALYZE_REF=master
 
@@ -41,13 +41,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && docker-php-ext-install -j$(nproc) curl dom gd gettext intl mbstring mysqli pdo_mysql simplexml xml zip
 
 RUN git clone --depth 1 --branch "${RUNALYZE_REF}" "${RUNALYZE_REPOSITORY}" "${RUNALYZE_DIR}" \
+    && cd "${RUNALYZE_DIR}" \
+    && git rev-parse HEAD > /tmp/runalyze-source-commit \
     && if [ ! -d "${RUNALYZE_DIR}/vendor" ]; then \
          curl -fsSL https://getcomposer.org/download/2.2.24/composer.phar -o /usr/local/bin/composer \
          && chmod +x /usr/local/bin/composer \
-         && cd "${RUNALYZE_DIR}" \
          && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts --ignore-platform-reqs; \
        fi \
-    && rm -rf "${RUNALYZE_DIR}/.git" \
+    && printf 'ADDON_VERSION=%s\nRUNALYZE_REPOSITORY=%s\nRUNALYZE_REF=%s\nRUNALYZE_COMMIT=%s\n' "${BUILD_VERSION}" "${RUNALYZE_REPOSITORY}" "${RUNALYZE_REF}" "$(cat /tmp/runalyze-source-commit)" > /etc/runalyze-addon-build-info \
+    && rm -rf "${RUNALYZE_DIR}/.git" /tmp/runalyze-source-commit \
     && chown -R www-data:www-data "${RUNALYZE_DIR}"
 
 COPY rootfs /

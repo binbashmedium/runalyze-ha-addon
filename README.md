@@ -16,6 +16,18 @@ Dieses Repository enthält ein Home-Assistant-Add-on für einen lokalen RUNALYZE
 7. Setze vor dem ersten Start sichere Datenbank-Passwörter in der Add-on-Konfiguration.
 8. Starte das Add-on und öffne die Web UI.
 
+## Update auf neue Version
+
+Nach Änderungen im Repository:
+
+1. Add-on stoppen.
+2. In Home Assistant den Add-on-Store neu laden.
+3. **RUNALYZE Server** auf Version `0.1.1` aktualisieren oder neu bauen.
+4. Add-on starten.
+5. Im Log auf diese Meldung prüfen:
+
+   `RUNALYZE web server is reachable on port 8099`
+
 ## Datenbankdaten
 
 Das Add-on startet MariaDB im selben Container und legt die Daten unter `/data/mysql` ab. Home Assistant sichert `/data` im Add-on-Backup.
@@ -30,6 +42,10 @@ Standardwerte:
 | Port | `3306` |
 | Datenbank | `runalyze` |
 | Benutzer | `runalyze` |
+
+## Technische Änderung in Version 0.1.1
+
+Version `0.1.1` verwendet PHP 7.4 statt Debian Bookworm PHP, installiert Composer-Abhängigkeiten beim Image-Build, setzt Apache explizit auf Port `8099`, richtet `ingress_port: 8099` ein und schreibt PHP/Apache-Fehler direkt ins Add-on-Log.
 
 ## Hinweis zur RUNALYZE-Version
 

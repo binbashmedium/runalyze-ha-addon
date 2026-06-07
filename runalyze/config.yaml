@@ -1,5 +1,5 @@
 name: "RUNALYZE Server"
-version: "0.1.12"
+version: "0.1.13"
 slug: "runalyze"
 description: "Self-hosted RUNALYZE Open Source server for Home Assistant"
 url: "https://github.com/binbashmedium/runalyze-ha-addon"

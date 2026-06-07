@@ -1,5 +1,5 @@
 name: "RUNALYZE Server"
-version: "0.1.0"
+version: "0.1.1"
 slug: "runalyze"
 description: "Self-hosted RUNALYZE Open Source server for Home Assistant"
 url: "https://github.com/binbashmedium/runalyze-ha-addon"
@@ -10,14 +10,14 @@ startup: services
 boot: auto
 init: false
 ingress: true
-ingress_port: 80
+ingress_port: 8099
 panel_icon: mdi:run-fast
 panel_title: RUNALYZE
-webui: "http://[HOST]:[PORT:80]/"
+webui: "http://[HOST]:[PORT:8099]/"
 ports:
-  80/tcp: 8088
+  8099/tcp: 8099
 ports_description:
-  80/tcp: "RUNALYZE web interface"
+  8099/tcp: "RUNALYZE web interface"
 options:
   db_name: runalyze
   db_user: runalyze
@@ -29,5 +29,5 @@ schema:
   db_password: password
   db_root_password: password
 backup: cold
-watchdog: "http://[HOST]:[PORT:80]/"
+watchdog: "http://[HOST]:[PORT:8099]/"
 build: .

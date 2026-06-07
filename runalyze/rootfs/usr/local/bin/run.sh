@@ -12,8 +12,6 @@ DB_NAME="runalyze"
 DB_USER="runalyze"
 DB_PASSWORD="change_me"
 DB_CREATE="false"
-DB_ADMIN_USER="root"
-DB_ADMIN_PASSWORD=""
 
 json_value() {
   local key="$1"
@@ -28,8 +26,6 @@ if [ -f "${CONFIG_PATH}" ]; then
   DB_USER="$(json_value db_user "${DB_USER}")"
   DB_PASSWORD="$(json_value db_password "${DB_PASSWORD}")"
   DB_CREATE="$(json_value db_create "${DB_CREATE}")"
-  DB_ADMIN_USER="$(json_value db_admin_user "${DB_ADMIN_USER}")"
-  DB_ADMIN_PASSWORD="$(json_value db_admin_password "${DB_ADMIN_PASSWORD}")"
 fi
 
 validate_identifier() {
@@ -39,10 +35,6 @@ validate_identifier() {
     echo "Invalid ${label}: only letters, numbers and underscore are allowed." >&2
     exit 1
   fi
-}
-
-sql_escape() {
-  printf '%s' "$1" | sed "s/'/''/g"
 }
 
 yaml_escape() {
@@ -57,18 +49,9 @@ chmod 1777 /tmp "${TMP_DIR}"
 chown -R www-data:www-data "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
 
 if [ "${DB_CREATE}" = "true" ]; then
-  if [ -z "${DB_ADMIN_PASSWORD}" ]; then
-    echo "db_create is true, but db_admin_password is empty." >&2
-    exit 1
-  fi
-
-  echo "Creating or updating RUNALYZE database and user on ${DB_HOST}:${DB_PORT}"
-  mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_ADMIN_USER}" -p"${DB_ADMIN_PASSWORD}" <<SQL
+  echo "Creating RUNALYZE database on ${DB_HOST}:${DB_PORT} with configured db_user"
+  mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" <<SQL
 CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '$(sql_escape "${DB_PASSWORD}")';
-ALTER USER '${DB_USER}'@'%' IDENTIFIED BY '$(sql_escape "${DB_PASSWORD}")';
-GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
-FLUSH PRIVILEGES;
 SQL
 fi
 

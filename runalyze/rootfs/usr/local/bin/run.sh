@@ -10,13 +10,20 @@ DB_HOST="core-mariadb"
 DB_PORT="3306"
 DB_NAME="runalyze"
 DB_USER="runalyze"
-DB_PASSWORD="change_me"
+DB_PASSWORD=""
 DB_CREATE="false"
+DB_USE_SUPERVISOR_SERVICE="true"
 
 json_value() {
   local key="$1"
   local fallback="$2"
   php -r '$data=json_decode(file_get_contents("/data/options.json"), true) ?: []; $key=$argv[1]; $fallback=$argv[2]; $value=$data[$key] ?? $fallback; if (is_bool($value)) { echo $value ? "true" : "false"; } else { echo $value; }' "$key" "$fallback"
+}
+
+json_field() {
+  local file="$1"
+  local field="$2"
+  php -r '$data=json_decode(file_get_contents($argv[1]), true) ?: []; $field=$argv[2]; $value=$data["data"][$field] ?? $data[$field] ?? ""; if (is_bool($value)) { echo $value ? "true" : "false"; } else { echo $value; }' "$file" "$field"
 }
 
 if [ -f "${CONFIG_PATH}" ]; then
@@ -26,6 +33,27 @@ if [ -f "${CONFIG_PATH}" ]; then
   DB_USER="$(json_value db_user "${DB_USER}")"
   DB_PASSWORD="$(json_value db_password "${DB_PASSWORD}")"
   DB_CREATE="$(json_value db_create "${DB_CREATE}")"
+  DB_USE_SUPERVISOR_SERVICE="$(json_value db_use_supervisor_service "${DB_USE_SUPERVISOR_SERVICE}")"
+fi
+
+if [ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ] && [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+  echo "Reading MySQL service credentials from Home Assistant Supervisor"
+  if curl -fsS -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" -H "Content-Type: application/json" "http://supervisor/services/mysql" >"${TMP_DIR}/mysql-service.json" 2>"${TMP_DIR}/mysql-service.err"; then
+    SERVICE_HOST="$(json_field "${TMP_DIR}/mysql-service.json" host)"
+    SERVICE_PORT="$(json_field "${TMP_DIR}/mysql-service.json" port)"
+    SERVICE_USER="$(json_field "${TMP_DIR}/mysql-service.json" username)"
+    SERVICE_PASSWORD="$(json_field "${TMP_DIR}/mysql-service.json" password)"
+
+    if [ -n "${SERVICE_HOST}" ]; then DB_HOST="${SERVICE_HOST}"; fi
+    if [ -n "${SERVICE_PORT}" ]; then DB_PORT="${SERVICE_PORT}"; fi
+    if [ -n "${SERVICE_USER}" ]; then DB_USER="${SERVICE_USER}"; fi
+    if [ -n "${SERVICE_PASSWORD}" ]; then DB_PASSWORD="${SERVICE_PASSWORD}"; fi
+
+    echo "Using Supervisor MySQL service user '${DB_USER}' at ${DB_HOST}:${DB_PORT}"
+  else
+    echo "Could not read Supervisor MySQL service credentials, falling back to configured database options." >&2
+    cat "${TMP_DIR}/mysql-service.err" >&2 || true
+  fi
 fi
 
 validate_identifier() {
@@ -44,12 +72,17 @@ yaml_escape() {
 validate_identifier "${DB_NAME}" "db_name"
 validate_identifier "${DB_USER}" "db_user"
 
+if [ -z "${DB_PASSWORD}" ]; then
+  echo "db_password is empty and no Supervisor MySQL service password was available." >&2
+  exit 1
+fi
+
 mkdir -p /run/apache2 "${TMP_DIR}" "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var/cache" "${RUNALYZE_DIR}/var/logs" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
 chmod 1777 /tmp "${TMP_DIR}"
 chown -R www-data:www-data "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
 
 if [ "${DB_CREATE}" = "true" ]; then
-  echo "Creating RUNALYZE database on ${DB_HOST}:${DB_PORT} with configured db_user"
+  echo "Creating RUNALYZE database on ${DB_HOST}:${DB_PORT} with configured database user"
   mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" <<SQL
 CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 SQL
@@ -95,7 +128,7 @@ Database host: ${DB_HOST}
 Database port: ${DB_PORT}
 Database name: ${DB_NAME}
 Database user: ${DB_USER}
-Database password: ${DB_PASSWORD}
+Database password source: $([ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ] && echo "supervisor mysql service or configured fallback" || echo "configured option")
 EOF
 chmod 600 /data/database.txt
 

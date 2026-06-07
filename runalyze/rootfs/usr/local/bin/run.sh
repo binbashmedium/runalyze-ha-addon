@@ -35,6 +35,23 @@ json_field() {
   php -r '$data=json_decode(file_get_contents($argv[1]), true) ?: []; $field=$argv[2]; $value=$data["data"][$field] ?? $data[$field] ?? ""; if (is_bool($value)) { echo $value ? "true" : "false"; } else { echo $value; }' "$file" "$field"
 }
 
+validate_identifier() {
+  local value="$1"
+  local label="$2"
+  if ! printf '%s' "$value" | grep -Eq '^[A-Za-z0-9_]+$'; then
+    echo "Invalid ${label}: only letters, numbers and underscore are allowed." >&2
+    exit 1
+  fi
+}
+
+yaml_escape() {
+  printf '%s' "$1" | sed "s/'/''/g"
+}
+
+mysql_run() {
+  mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" "$@"
+}
+
 if [ -f "${CONFIG_PATH}" ]; then
   DB_HOST="$(json_value db_host "${DB_HOST}")"
   DB_PORT="$(json_value db_port "${DB_PORT}")"
@@ -65,19 +82,6 @@ else
   echo "Using configured database user '${DB_USER}' at ${DB_HOST}:${DB_PORT}"
 fi
 
-validate_identifier() {
-  local value="$1"
-  local label="$2"
-  if ! printf '%s' "$value" | grep -Eq '^[A-Za-z0-9_]+$'; then
-    echo "Invalid ${label}: only letters, numbers and underscore are allowed." >&2
-    exit 1
-  fi
-}
-
-yaml_escape() {
-  printf '%s' "$1" | sed "s/'/''/g"
-}
-
 validate_identifier "${DB_NAME}" "db_name"
 validate_identifier "${DB_USER}" "db_user"
 
@@ -88,12 +92,12 @@ fi
 
 if [ "${DB_CREATE}" = "true" ]; then
   echo "Creating RUNALYZE database on ${DB_HOST}:${DB_PORT}"
-  mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+  mysql_run -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 fi
 
 echo "Waiting for external MariaDB at ${DB_HOST}:${DB_PORT}"
 for i in $(seq 1 60); do
-  if mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -e "SELECT 1" >/dev/null 2>"${TMP_DIR}/mariadb-check.err"; then
+  if mysql_run "${DB_NAME}" -e "SELECT 1" >/dev/null 2>"${TMP_DIR}/mariadb-check.err"; then
     echo "External MariaDB connection OK"
     break
   fi
@@ -155,7 +159,6 @@ EOF
 chown www-data:www-data "${RUNALYZE_DIR}/data/config.yml"
 chmod 600 "${RUNALYZE_DIR}/data/config.yml"
 
-echo "RUNALYZE database settings written to /data/database.txt"
 cat >/data/database.txt <<EOF
 Database host: ${DB_HOST}
 Database port: ${DB_PORT}
@@ -165,21 +168,36 @@ Database password source: $([ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ] && echo 
 EOF
 chmod 600 /data/database.txt
 
-TABLE_COUNT="$(mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}' AND table_name LIKE 'runalyze_%';" 2>/dev/null || echo 0)"
-echo "RUNALYZE table count before migrations: ${TABLE_COUNT}"
+echo "RUNALYZE database settings written to /data/database.txt"
+TABLE_COUNT="$(mysql_run "${DB_NAME}" -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}' AND table_name LIKE 'runalyze_%';" 2>/dev/null || echo 0)"
+echo "RUNALYZE table count before initialization: ${TABLE_COUNT}"
+
 if [ "${TABLE_COUNT}" = "0" ]; then
-  echo "Running RUNALYZE database migrations"
-  if [ -x "${RUNALYZE_DIR}/bin/console" ]; then
-    su -s /bin/sh www-data -c "cd '${RUNALYZE_DIR}' && php bin/console doctrine:migrations:migrate --env=prod --no-debug --no-interaction"
-  elif [ -x "${RUNALYZE_DIR}/app/console" ]; then
-    su -s /bin/sh www-data -c "cd '${RUNALYZE_DIR}' && php app/console doctrine:migrations:migrate --env=prod --no-debug --no-interaction"
+  if [ -f "${RUNALYZE_DIR}/inc/install/structure.sql" ]; then
+    echo "Importing RUNALYZE initial schema from inc/install/structure.sql"
+    mysql_run "${DB_NAME}" < "${RUNALYZE_DIR}/inc/install/structure.sql"
   else
-    echo "No RUNALYZE console command found. Cannot initialize database schema." >&2
-    find "${RUNALYZE_DIR}" -maxdepth 3 -type f | sort | sed -n '1,200p' >&2
+    echo "Missing ${RUNALYZE_DIR}/inc/install/structure.sql, cannot initialize empty database." >&2
     exit 1
   fi
+
+  if [ -f "${RUNALYZE_DIR}/inc/install/MySQLEvents.sql" ]; then
+    echo "Importing RUNALYZE MySQL events if permitted"
+    mysql_run "${DB_NAME}" < "${RUNALYZE_DIR}/inc/install/MySQLEvents.sql" || echo "MySQL events import failed or EVENT privilege missing, continuing."
+  fi
+
+  TABLE_COUNT_AFTER="$(mysql_run "${DB_NAME}" -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}' AND table_name LIKE 'runalyze_%';" 2>/dev/null || echo 0)"
+  echo "RUNALYZE table count after initial schema import: ${TABLE_COUNT_AFTER}"
 else
-  echo "RUNALYZE database already contains tables, skipping migrations"
+  echo "RUNALYZE database already contains tables, skipping initial schema import"
+fi
+
+if [ -f "${RUNALYZE_DIR}/bin/console" ]; then
+  echo "RUNALYZE console found at bin/console"
+elif [ -f "${RUNALYZE_DIR}/app/console" ]; then
+  echo "RUNALYZE console found at app/console"
+else
+  echo "No RUNALYZE console file found"
 fi
 
 echo "Starting Apache on port ${APACHE_PORT}"

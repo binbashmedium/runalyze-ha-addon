@@ -2,9 +2,38 @@
 $path = '/var/www/runalyze/composer.json';
 $data = json_decode(file_get_contents($path), true);
 
+if (!is_array($data)) {
+    fwrite(STDERR, "Could not parse composer.json\n");
+    exit(1);
+}
+
+function normalizePackageNames(array $packages): array
+{
+    $normalized = [];
+
+    foreach ($packages as $name => $constraint) {
+        $normalized[strtolower($name)] = $constraint;
+    }
+
+    return $normalized;
+}
+
+if (isset($data['require']) && is_array($data['require'])) {
+    $data['require'] = normalizePackageNames($data['require']);
+}
+
+unset($data['require-dev']);
+
 if (!isset($data['repositories']) || !is_array($data['repositories'])) {
     $data['repositories'] = [];
 }
+
+foreach ($data['repositories'] as &$repository) {
+    if (isset($repository['package']['name'])) {
+        $repository['package']['name'] = strtolower($repository['package']['name']);
+    }
+}
+unset($repository);
 
 array_unshift($data['repositories'], [
     'type' => 'package',
@@ -22,7 +51,7 @@ array_unshift($data['repositories'], [
             'ext-dom' => '*',
             'ext-xml' => '*',
             'ext-libxml' => '*',
-            'ext-SimpleXML' => '*',
+            'ext-simplexml' => '*',
             'laminas/laminas-xml' => '^1.2',
         ],
         'autoload' => [

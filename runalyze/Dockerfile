@@ -1,7 +1,7 @@
 FROM php:7.4-apache-bullseye
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.15
+ARG BUILD_VERSION=0.1.16
 ARG RUNALYZE_REPOSITORY=https://github.com/codeproducer198/Runalyze.git
 ARG RUNALYZE_REF=master
 
@@ -43,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     zip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) bcmath curl gd gettext intl mbstring mysqli pdo_mysql pdo_sqlite sqlite3 zip
+    && docker-php-ext-install -j$(nproc) bcmath curl gd gettext intl mbstring mysqli pdo_mysql zip
 
 RUN git clone --depth 1 --branch "${RUNALYZE_REF}" "${RUNALYZE_REPOSITORY}" "${RUNALYZE_DIR}" \
     && cd "${RUNALYZE_DIR}" \

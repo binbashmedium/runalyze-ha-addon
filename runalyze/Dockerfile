@@ -1,7 +1,7 @@
 FROM php:7.4-apache-bullseye
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.5
+ARG BUILD_VERSION=0.1.6
 ARG RUNALYZE_REF=support/4.3.x
 
 LABEL \
@@ -33,7 +33,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng-dev \
     libxml2-dev \
     libzip-dev \
-    mariadb-server \
     mariadb-client \
     unzip \
     zip \
@@ -56,8 +55,7 @@ RUN sed -i 's/^Listen .*/Listen 8099/' /etc/apache2/ports.conf \
     && a2dissite 000-default \
     && a2ensite runalyze \
     && chmod +x /usr/local/bin/run.sh \
-    && mkdir -p /data /run/mysqld /run/apache2 \
-    && chown -R mysql:mysql /run/mysqld \
+    && mkdir -p /data /run/apache2 \
     && chown -R www-data:www-data "${RUNALYZE_DIR}"
 
 EXPOSE 8099

@@ -1,7 +1,7 @@
 FROM php:7.4-apache-bullseye
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.3
+ARG BUILD_VERSION=0.1.4
 ARG RUNALYZE_REF=support/4.3.x
 
 LABEL \
@@ -38,13 +38,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     zip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) curl gd intl mbstring mysqli pdo_mysql xml zip
+    && docker-php-ext-install -j$(nproc) curl dom gd intl mbstring mysqli pdo_mysql simplexml xml zip
 
 COPY --from=composer:1.10 /usr/bin/composer /usr/local/bin/composer
+COPY rootfs/tmp/patch-runalyze-composer.php /tmp/patch-runalyze-composer.php
 
 RUN git clone --depth 1 --branch "${RUNALYZE_REF}" https://github.com/Runalyze/Runalyze.git "${RUNALYZE_DIR}" \
+    && php /tmp/patch-runalyze-composer.php \
     && cd "${RUNALYZE_DIR}" \
-    && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts --ignore-platform-reqs \
+    && composer update miniflux/picofeed laminas/laminas-xml --with-dependencies --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts --ignore-platform-reqs \
     && chown -R www-data:www-data "${RUNALYZE_DIR}"
 
 COPY rootfs /

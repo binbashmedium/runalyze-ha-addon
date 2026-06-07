@@ -1,7 +1,7 @@
 FROM php:7.4-apache-bullseye
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.16
+ARG BUILD_VERSION=0.1.17
 ARG RUNALYZE_REPOSITORY=https://github.com/codeproducer198/Runalyze.git
 ARG RUNALYZE_REF=master
 

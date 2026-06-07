@@ -18,6 +18,13 @@ mkdir -p /run/apache2 "${TMP_DIR}" "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var/c
 chmod 1777 /tmp "${TMP_DIR}"
 chown -R www-data:www-data "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
 
+if [ -f /etc/runalyze-addon-build-info ]; then
+  echo "RUNALYZE add-on build info:"
+  cat /etc/runalyze-addon-build-info
+else
+  echo "RUNALYZE add-on build info file is missing"
+fi
+
 json_value() {
   local key="$1"
   local fallback="$2"
@@ -170,6 +177,9 @@ for i in $(seq 1 30); do
     cat "${TMP_DIR}/runalyze-healthcheck.err" 2>/dev/null || true
     echo "Last healthcheck response body, first 200 lines:" >&2
     sed -n '1,200p' "${TMP_DIR}/runalyze-healthcheck.html" >&2 || true
+    echo "RUNALYZE internal logs, last 200 lines:" >&2
+    find "${RUNALYZE_DIR}" -path '*/var/logs/*' -type f -print -exec sh -c 'echo "--- $1 ---" >&2; tail -n 200 "$1" >&2' sh {} \; 2>/dev/null || true
+    find "${RUNALYZE_DIR}" -path '*/app/logs/*' -type f -print -exec sh -c 'echo "--- $1 ---" >&2; tail -n 200 "$1" >&2' sh {} \; 2>/dev/null || true
   fi
 done
 

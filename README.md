@@ -22,7 +22,7 @@ Nach Änderungen im Repository:
 
 1. Add-on stoppen.
 2. In Home Assistant den Add-on-Store neu laden.
-3. **RUNALYZE Server** auf Version `0.1.2` aktualisieren oder neu bauen.
+3. **RUNALYZE Server** auf Version `0.1.3` aktualisieren oder neu bauen.
 4. Add-on starten.
 5. Im Log auf diese Meldung prüfen:
 
@@ -44,6 +44,8 @@ Standardwerte:
 | Benutzer | `runalyze` |
 
 ## Technische Änderungen
+
+Version `0.1.3` verwendet Composer `1.10`, weil Composer 2 alte Paketnamen mit Großbuchstaben im archivierten RUNALYZE-Branch ablehnt.
 
 Version `0.1.2` ergänzt `libonig-dev`, damit die PHP-Erweiterung `mbstring` erfolgreich gebaut werden kann.
 

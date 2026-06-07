@@ -1,5 +1,5 @@
 name: "RUNALYZE Server"
-version: "0.1.5"
+version: "0.1.6"
 slug: "runalyze"
 description: "Self-hosted RUNALYZE Open Source server for Home Assistant"
 url: "https://github.com/binbashmedium/runalyze-ha-addon"
@@ -19,15 +19,23 @@ ports:
 ports_description:
   8099/tcp: "RUNALYZE web interface"
 options:
+  db_host: core-mariadb
+  db_port: 3306
   db_name: runalyze
   db_user: runalyze
   db_password: change_me
-  db_root_password: change_me_root
+  db_create: false
+  db_admin_user: root
+  db_admin_password: ""
 schema:
+  db_host: str
+  db_port: port
   db_name: str
   db_user: str
   db_password: password
-  db_root_password: password
+  db_create: bool
+  db_admin_user: str
+  db_admin_password: password
 backup: cold
 watchdog: "http://[HOST]:[PORT:8099]/"
 build: .

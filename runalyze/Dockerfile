@@ -1,7 +1,7 @@
 FROM php:7.4-apache-bullseye
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.6
+ARG BUILD_VERSION=0.1.7
 ARG RUNALYZE_REF=support/4.3.x
 
 LABEL \

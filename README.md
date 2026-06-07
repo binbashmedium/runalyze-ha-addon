@@ -22,7 +22,7 @@ Nach Änderungen im Repository:
 
 1. Add-on stoppen.
 2. In Home Assistant den Add-on-Store neu laden.
-3. **RUNALYZE Server** auf Version `0.1.1` aktualisieren oder neu bauen.
+3. **RUNALYZE Server** auf Version `0.1.2` aktualisieren oder neu bauen.
 4. Add-on starten.
 5. Im Log auf diese Meldung prüfen:
 
@@ -43,7 +43,9 @@ Standardwerte:
 | Datenbank | `runalyze` |
 | Benutzer | `runalyze` |
 
-## Technische Änderung in Version 0.1.1
+## Technische Änderungen
+
+Version `0.1.2` ergänzt `libonig-dev`, damit die PHP-Erweiterung `mbstring` erfolgreich gebaut werden kann.
 
 Version `0.1.1` verwendet PHP 7.4 statt Debian Bookworm PHP, installiert Composer-Abhängigkeiten beim Image-Build, setzt Apache explizit auf Port `8099`, richtet `ingress_port: 8099` ein und schreibt PHP/Apache-Fehler direkt ins Add-on-Log.
 

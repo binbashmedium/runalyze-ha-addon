@@ -12,7 +12,7 @@ DB_NAME="runalyze"
 DB_USER="runalyze"
 DB_PASSWORD=""
 DB_CREATE="false"
-DB_USE_SUPERVISOR_SERVICE="true"
+DB_USE_SUPERVISOR_SERVICE="false"
 
 mkdir -p /run/apache2 "${TMP_DIR}" "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var/cache" "${RUNALYZE_DIR}/var/logs" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
 chmod 1777 /tmp "${TMP_DIR}"
@@ -40,6 +40,8 @@ if [ -f "${CONFIG_PATH}" ]; then
   DB_USE_SUPERVISOR_SERVICE="$(json_value db_use_supervisor_service "${DB_USE_SUPERVISOR_SERVICE}")"
 fi
 
+echo "Configured DB user before Supervisor override: ${DB_USER}"
+
 if [ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ]; then
   if [ -z "${SUPERVISOR_TOKEN:-}" ]; then
     echo "db_use_supervisor_service is true, but SUPERVISOR_TOKEN is not available. Check hassio_api: true in config.yaml." >&2
@@ -64,6 +66,8 @@ if [ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ]; then
     cat "${TMP_DIR}/mysql-service.err" >&2 || true
     exit 1
   fi
+else
+  echo "Using configured database user '${DB_USER}' at ${DB_HOST}:${DB_PORT}"
 fi
 
 validate_identifier() {
@@ -83,15 +87,19 @@ validate_identifier "${DB_NAME}" "db_name"
 validate_identifier "${DB_USER}" "db_user"
 
 if [ -z "${DB_PASSWORD}" ]; then
-  echo "db_password is empty and no Supervisor MySQL service password was available." >&2
+  echo "db_password is empty. Either set db_password or enable db_use_supervisor_service." >&2
   exit 1
 fi
 
 if [ "${DB_CREATE}" = "true" ]; then
   echo "Creating RUNALYZE database on ${DB_HOST}:${DB_PORT} with configured database user"
-  mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" <<SQL
+  if ! mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" <<SQL
 CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 SQL
+  then
+    echo "Database creation failed. If the database already exists, set db_create: false. If not, grant CREATE DATABASE to ${DB_USER}." >&2
+    exit 1
+  fi
 fi
 
 echo "Waiting for external MariaDB at ${DB_HOST}:${DB_PORT}"
@@ -145,7 +153,8 @@ apache2ctl -D FOREGROUND &
 APACHE_PID=$!
 
 for i in $(seq 1 30); do
-  if curl -fsS "http://127.0.0.1:${APACHE_PORT}/" >"${TMP_DIR}/runalyze-healthcheck.html" 2>"${TMP_DIR}/runalyze-healthcheck.err"; then
+  HTTP_STATUS="$(curl -sS -o "${TMP_DIR}/runalyze-healthcheck.html" -w "%{http_code}" "http://127.0.0.1:${APACHE_PORT}/" 2>"${TMP_DIR}/runalyze-healthcheck.err" || true)"
+  if [ "${HTTP_STATUS}" -ge 200 ] && [ "${HTTP_STATUS}" -lt 300 ]; then
     echo "RUNALYZE web server is reachable on port ${APACHE_PORT}"
     break
   fi
@@ -156,9 +165,11 @@ for i in $(seq 1 30); do
   fi
   sleep 1
   if [ "$i" = "30" ]; then
-    echo "Apache is running, but RUNALYZE did not return HTTP 2xx within 30 seconds." >&2
-    echo "Last healthcheck error:" >&2
+    echo "Apache is running, but RUNALYZE returned HTTP ${HTTP_STATUS} within 30 seconds." >&2
+    echo "Last healthcheck transport error:" >&2
     cat "${TMP_DIR}/runalyze-healthcheck.err" 2>/dev/null || true
+    echo "Last healthcheck response body, first 200 lines:" >&2
+    sed -n '1,200p' "${TMP_DIR}/runalyze-healthcheck.html" >&2 || true
   fi
 done
 

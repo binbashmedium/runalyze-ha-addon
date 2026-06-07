@@ -1,6 +1,15 @@
 FROM debian:bookworm-slim
 
+ARG BUILD_ARCH=amd64
+ARG BUILD_VERSION=0.1.0
 ARG RUNALYZE_REF=support/4.3.x
+
+LABEL \
+    io.hass.name="RUNALYZE Server" \
+    io.hass.description="Self-hosted RUNALYZE Open Source server for Home Assistant" \
+    io.hass.type="addon" \
+    io.hass.version="${BUILD_VERSION}" \
+    io.hass.arch="${BUILD_ARCH}"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     APACHE_RUN_USER=www-data \

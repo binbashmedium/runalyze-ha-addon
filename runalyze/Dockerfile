@@ -1,8 +1,9 @@
 FROM php:7.4-apache-bullseye
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.11
-ARG RUNALYZE_REF=support/4.3.x
+ARG BUILD_VERSION=0.1.12
+ARG RUNALYZE_REPOSITORY=https://github.com/codeproducer198/Runalyze.git
+ARG RUNALYZE_REF=master
 
 LABEL \
     io.hass.name="RUNALYZE Server" \
@@ -39,13 +40,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) curl dom gd gettext intl mbstring mysqli pdo_mysql simplexml xml zip
 
-COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
-COPY rootfs/tmp/patch-runalyze-composer.php /tmp/patch-runalyze-composer.php
-
-RUN git clone --depth 1 --branch "${RUNALYZE_REF}" https://github.com/Runalyze/Runalyze.git "${RUNALYZE_DIR}" \
-    && php /tmp/patch-runalyze-composer.php \
-    && cd "${RUNALYZE_DIR}" \
-    && composer update miniflux/picofeed laminas/laminas-xml --with-dependencies --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts --ignore-platform-reqs \
+RUN git clone --depth 1 --branch "${RUNALYZE_REF}" "${RUNALYZE_REPOSITORY}" "${RUNALYZE_DIR}" \
+    && if [ ! -d "${RUNALYZE_DIR}/vendor" ]; then \
+         curl -fsSL https://getcomposer.org/download/2.2.24/composer.phar -o /usr/local/bin/composer \
+         && chmod +x /usr/local/bin/composer \
+         && cd "${RUNALYZE_DIR}" \
+         && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts --ignore-platform-reqs; \
+       fi \
+    && rm -rf "${RUNALYZE_DIR}/.git" \
     && chown -R www-data:www-data "${RUNALYZE_DIR}"
 
 COPY rootfs /

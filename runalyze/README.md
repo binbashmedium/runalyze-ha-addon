@@ -29,6 +29,17 @@ db_root_password: change_me_root
 | Benutzer | Wert aus `db_user` |
 | Passwort | Wert aus `db_password` |
 
+## Version 0.1.1
+
+Diese Version behebt die weiße Ingress-Seite durch folgende Änderungen:
+
+- Apache hört explizit auf Port `8099`.
+- `ingress_port` ist auf `8099` gesetzt.
+- PHP 7.4 wird verwendet, passend zur archivierten RUNALYZE-Codebasis.
+- Composer-Abhängigkeiten werden im Image installiert.
+- Apache- und PHP-Fehler erscheinen direkt im Add-on-Log.
+- Beim Start wird `http://127.0.0.1:8099/` geprüft.
+
 ## Persistenz
 
 MariaDB-Daten werden unter `/data/mysql` gespeichert und über Home-Assistant-Add-on-Backups gesichert.

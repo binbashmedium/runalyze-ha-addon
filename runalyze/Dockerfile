@@ -1,7 +1,7 @@
 FROM php:7.4-apache-bullseye
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.8
+ARG BUILD_VERSION=0.1.10
 ARG RUNALYZE_REF=support/4.3.x
 
 LABEL \
@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     zip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) curl dom gd intl mbstring mysqli pdo_mysql simplexml xml zip
+    && docker-php-ext-install -j$(nproc) curl dom gd gettext intl mbstring mysqli pdo_mysql simplexml xml zip
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 COPY rootfs/tmp/patch-runalyze-composer.php /tmp/patch-runalyze-composer.php

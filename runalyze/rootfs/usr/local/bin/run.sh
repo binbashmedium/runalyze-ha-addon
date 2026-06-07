@@ -13,6 +13,8 @@ DB_USER="runalyze"
 DB_PASSWORD=""
 DB_CREATE="false"
 DB_USE_SUPERVISOR_SERVICE="false"
+USER_CAN_REGISTER="true"
+USER_DISABLE_ACCOUNT_ACTIVATION="true"
 
 mkdir -p /run/apache2 "${TMP_DIR}" "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var/cache" "${RUNALYZE_DIR}/var/logs" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
 chmod 1777 /tmp "${TMP_DIR}"
@@ -60,6 +62,8 @@ if [ -f "${CONFIG_PATH}" ]; then
   DB_PASSWORD="$(json_value db_password "${DB_PASSWORD}")"
   DB_CREATE="$(json_value db_create "${DB_CREATE}")"
   DB_USE_SUPERVISOR_SERVICE="$(json_value db_use_supervisor_service "${DB_USE_SUPERVISOR_SERVICE}")"
+  USER_CAN_REGISTER="$(json_value user_can_register "${USER_CAN_REGISTER}")"
+  USER_DISABLE_ACCOUNT_ACTIVATION="$(json_value user_disable_account_activation "${USER_DISABLE_ACCOUNT_ACTIVATION}")"
 fi
 
 if [ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ]; then
@@ -81,6 +85,8 @@ if [ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ]; then
 else
   echo "Using configured database user '${DB_USER}' at ${DB_HOST}:${DB_PORT}"
 fi
+
+echo "RUNALYZE registration config: user_can_register=${USER_CAN_REGISTER}, user_disable_account_activation=${USER_DISABLE_ACCOUNT_ACTIVATION}"
 
 validate_identifier "${DB_NAME}" "db_name"
 validate_identifier "${DB_USER}" "db_user"
@@ -120,8 +126,8 @@ parameters:
   database_password: '$(yaml_escape "${DB_PASSWORD}")'
   secret: '$(php -r 'echo bin2hex(random_bytes(24));')'
   update_disabled: no
-  user_can_register: true
-  user_disable_account_activation: false
+  user_can_register: ${USER_CAN_REGISTER}
+  user_disable_account_activation: ${USER_DISABLE_ACCOUNT_ACTIVATION}
   maintenance: false
   garmin_api_key:
   weather_proxy:
@@ -190,14 +196,6 @@ if [ "${TABLE_COUNT}" = "0" ]; then
   echo "RUNALYZE table count after initial schema import: ${TABLE_COUNT_AFTER}"
 else
   echo "RUNALYZE database already contains tables, skipping initial schema import"
-fi
-
-if [ -f "${RUNALYZE_DIR}/bin/console" ]; then
-  echo "RUNALYZE console found at bin/console"
-elif [ -f "${RUNALYZE_DIR}/app/console" ]; then
-  echo "RUNALYZE console found at app/console"
-else
-  echo "No RUNALYZE console file found"
 fi
 
 echo "Starting Apache on port ${APACHE_PORT}"

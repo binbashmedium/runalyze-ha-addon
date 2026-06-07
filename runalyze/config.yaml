@@ -1,5 +1,5 @@
 name: RUNALYZE Server
-version: 0.1.17
+version: 0.1.18
 slug: runalyze
 description: Self-hosted RUNALYZE Open Source server for Home Assistant
 url: https://github.com/binbashmedium/runalyze-ha-addon
@@ -29,6 +29,8 @@ options:
   db_user: runalyze
   db_password: ""
   db_create: false
+  user_can_register: true
+  user_disable_account_activation: true
 schema:
   db_use_supervisor_service: bool
   db_host: str
@@ -37,6 +39,8 @@ schema:
   db_user: str
   db_password: password
   db_create: bool
+  user_can_register: bool
+  user_disable_account_activation: bool
 backup: cold
 watchdog: http://[HOST]:[PORT:8099]/
 build: .

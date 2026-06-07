@@ -2,78 +2,114 @@
 set -euo pipefail
 
 CONFIG_PATH=/data/options.json
-MYSQL_DATA=/data/mysql
-INIT_MARKER=/data/.runalyze_db_initialized
 RUNALYZE_DIR=/var/www/runalyze
 APACHE_PORT=8099
+TMP_DIR=/data/tmp
 
+DB_HOST="core-mariadb"
+DB_PORT="3306"
 DB_NAME="runalyze"
 DB_USER="runalyze"
 DB_PASSWORD="change_me"
-DB_ROOT_PASSWORD="change_me_root"
+DB_CREATE="false"
+DB_ADMIN_USER="root"
+DB_ADMIN_PASSWORD=""
+
+json_value() {
+  local key="$1"
+  local fallback="$2"
+  php -r '$data=json_decode(file_get_contents("/data/options.json"), true) ?: []; $key=$argv[1]; $fallback=$argv[2]; $value=$data[$key] ?? $fallback; if (is_bool($value)) { echo $value ? "true" : "false"; } else { echo $value; }' "$key" "$fallback"
+}
 
 if [ -f "${CONFIG_PATH}" ]; then
-  DB_NAME="$(php -r 'echo json_decode(file_get_contents("/data/options.json"), true)["db_name"] ?? "runalyze";')"
-  DB_USER="$(php -r 'echo json_decode(file_get_contents("/data/options.json"), true)["db_user"] ?? "runalyze";')"
-  DB_PASSWORD="$(php -r 'echo json_decode(file_get_contents("/data/options.json"), true)["db_password"] ?? "change_me";')"
-  DB_ROOT_PASSWORD="$(php -r 'echo json_decode(file_get_contents("/data/options.json"), true)["db_root_password"] ?? "change_me_root";')"
+  DB_HOST="$(json_value db_host "${DB_HOST}")"
+  DB_PORT="$(json_value db_port "${DB_PORT}")"
+  DB_NAME="$(json_value db_name "${DB_NAME}")"
+  DB_USER="$(json_value db_user "${DB_USER}")"
+  DB_PASSWORD="$(json_value db_password "${DB_PASSWORD}")"
+  DB_CREATE="$(json_value db_create "${DB_CREATE}")"
+  DB_ADMIN_USER="$(json_value db_admin_user "${DB_ADMIN_USER}")"
+  DB_ADMIN_PASSWORD="$(json_value db_admin_password "${DB_ADMIN_PASSWORD}")"
 fi
 
-mkdir -p /run/mysqld /run/apache2 "${MYSQL_DATA}"
-chown -R mysql:mysql /run/mysqld "${MYSQL_DATA}"
+validate_identifier() {
+  local value="$1"
+  local label="$2"
+  if ! printf '%s' "$value" | grep -Eq '^[A-Za-z0-9_]+$'; then
+    echo "Invalid ${label}: only letters, numbers and underscore are allowed." >&2
+    exit 1
+  fi
+}
 
-if [ ! -d "${MYSQL_DATA}/mysql" ]; then
-  echo "Initializing MariaDB data directory"
-  mariadb-install-db --user=mysql --datadir="${MYSQL_DATA}" --skip-test-db >/dev/null
-  rm -f "${INIT_MARKER}"
+sql_escape() {
+  printf '%s' "$1" | sed "s/'/''/g"
+}
+
+yaml_escape() {
+  printf '%s' "$1" | sed "s/'/''/g"
+}
+
+validate_identifier "${DB_NAME}" "db_name"
+validate_identifier "${DB_USER}" "db_user"
+
+mkdir -p /run/apache2 "${TMP_DIR}" "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var/cache" "${RUNALYZE_DIR}/var/logs" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
+chmod 1777 /tmp "${TMP_DIR}"
+chown -R www-data:www-data "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var" "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/web/uploads"
+
+if [ "${DB_CREATE}" = "true" ]; then
+  if [ -z "${DB_ADMIN_PASSWORD}" ]; then
+    echo "db_create is true, but db_admin_password is empty." >&2
+    exit 1
+  fi
+
+  echo "Creating or updating RUNALYZE database and user on ${DB_HOST}:${DB_PORT}"
+  mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_ADMIN_USER}" -p"${DB_ADMIN_PASSWORD}" <<SQL
+CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '$(sql_escape "${DB_PASSWORD}")';
+ALTER USER '${DB_USER}'@'%' IDENTIFIED BY '$(sql_escape "${DB_PASSWORD}")';
+GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
+FLUSH PRIVILEGES;
+SQL
 fi
 
-cat >/etc/mysql/mariadb.conf.d/99-runalyze.cnf <<EOF
-[mysqld]
-datadir=${MYSQL_DATA}
-bind-address=127.0.0.1
-socket=/run/mysqld/mysqld.sock
-skip-networking=0
-character-set-server=utf8mb4
-collation-server=utf8mb4_unicode_ci
-
-[client]
-socket=/run/mysqld/mysqld.sock
-EOF
-
-mysqld_safe --datadir="${MYSQL_DATA}" --socket=/run/mysqld/mysqld.sock --pid-file=/run/mysqld/mysqld.pid &
-MYSQL_PID=$!
-
+echo "Waiting for external MariaDB at ${DB_HOST}:${DB_PORT}"
 for i in $(seq 1 60); do
-  if mariadb-admin ping --socket=/run/mysqld/mysqld.sock --silent; then
+  if mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -e "SELECT 1" >/dev/null 2>"${TMP_DIR}/mariadb-check.err"; then
+    echo "External MariaDB connection OK"
     break
   fi
   sleep 1
   if [ "$i" = "60" ]; then
-    echo "MariaDB did not start in time" >&2
+    echo "Could not connect to external MariaDB as ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}" >&2
+    echo "Last MariaDB error:" >&2
+    cat "${TMP_DIR}/mariadb-check.err" >&2 || true
     exit 1
   fi
 done
 
-if [ ! -f "${INIT_MARKER}" ]; then
-  mariadb --socket=/run/mysqld/mysqld.sock <<SQL
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${DB_ROOT_PASSWORD}';
-CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';
-GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
-FLUSH PRIVILEGES;
-SQL
-  touch "${INIT_MARKER}"
-else
-  echo "MariaDB was already initialized, keeping existing database and users."
-fi
-
-mkdir -p "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/var" "${RUNALYZE_DIR}/web/uploads"
-chown -R www-data:www-data "${RUNALYZE_DIR}/app/cache" "${RUNALYZE_DIR}/app/logs" "${RUNALYZE_DIR}/var" "${RUNALYZE_DIR}/web/uploads"
+cat >"${RUNALYZE_DIR}/data/config.yml" <<EOF
+parameters:
+  database_host: '$(yaml_escape "${DB_HOST}")'
+  database_port: ${DB_PORT}
+  database_name: '$(yaml_escape "${DB_NAME}")'
+  database_user: '$(yaml_escape "${DB_USER}")'
+  database_password: '$(yaml_escape "${DB_PASSWORD}")'
+  database_prefix: runalyze_
+  secret: '$(php -r 'echo bin2hex(random_bytes(24));')'
+  update_disabled: true
+  user_can_register: true
+  user_disable_account_activation: true
+  maintenance: false
+  router.request_context.host: localhost
+  router.request_context.scheme: http
+  router.request_context.base_url:
+EOF
+chown www-data:www-data "${RUNALYZE_DIR}/data/config.yml"
+chmod 600 "${RUNALYZE_DIR}/data/config.yml"
 
 cat >/data/database.txt <<EOF
-Database host: 127.0.0.1
-Database port: 3306
+Database host: ${DB_HOST}
+Database port: ${DB_PORT}
 Database name: ${DB_NAME}
 Database user: ${DB_USER}
 Database password: ${DB_PASSWORD}
@@ -87,22 +123,22 @@ apache2ctl -D FOREGROUND &
 APACHE_PID=$!
 
 for i in $(seq 1 30); do
-  if curl -fsS "http://127.0.0.1:${APACHE_PORT}/" >/tmp/runalyze-healthcheck.html 2>/tmp/runalyze-healthcheck.err; then
+  if curl -fsS "http://127.0.0.1:${APACHE_PORT}/" >"${TMP_DIR}/runalyze-healthcheck.html" 2>"${TMP_DIR}/runalyze-healthcheck.err"; then
     echo "RUNALYZE web server is reachable on port ${APACHE_PORT}"
     break
   fi
   if ! kill -0 "${APACHE_PID}" 2>/dev/null; then
     echo "Apache stopped unexpectedly" >&2
-    cat /tmp/runalyze-healthcheck.err 2>/dev/null || true
+    cat "${TMP_DIR}/runalyze-healthcheck.err" 2>/dev/null || true
     exit 1
   fi
   sleep 1
   if [ "$i" = "30" ]; then
     echo "Apache is running, but RUNALYZE did not return HTTP 2xx within 30 seconds." >&2
     echo "Last healthcheck error:" >&2
-    cat /tmp/runalyze-healthcheck.err 2>/dev/null || true
+    cat "${TMP_DIR}/runalyze-healthcheck.err" 2>/dev/null || true
   fi
 done
 
-trap 'apache2ctl stop || true; mariadb-admin --socket=/run/mysqld/mysqld.sock -uroot -p"${DB_ROOT_PASSWORD}" shutdown || true; kill ${MYSQL_PID} || true' TERM INT
+trap 'apache2ctl stop || true' TERM INT
 wait "${APACHE_PID}"

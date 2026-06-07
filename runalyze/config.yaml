@@ -1,5 +1,5 @@
 name: "RUNALYZE Server"
-version: "0.1.8"
+version: "0.1.9"
 slug: "runalyze"
 description: "Self-hosted RUNALYZE Open Source server for Home Assistant"
 url: "https://github.com/binbashmedium/runalyze-ha-addon"
@@ -22,11 +22,11 @@ ports:
 ports_description:
   8099/tcp: "RUNALYZE web interface"
 options:
-  db_use_supervisor_service: true
+  db_use_supervisor_service: false
   db_host: core-mariadb
   db_port: 3306
   db_name: runalyze
-  db_user: service
+  db_user: runalyze
   db_password: ""
   db_create: false
 schema:

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="RUNALYZE">
+  <rect width="256" height="256" rx="56" fill="#111827"/>
+  <path d="M48 165c21-43 43-63 66-58 17 4 24 18 40 18 15 0 28-17 54-55" fill="none" stroke="#38bdf8" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="82" cy="154" r="14" fill="#f97316"/>
+  <path d="M73 154l-20 36M94 155l19 35M86 141l22-20M76 141l-23-19" fill="none" stroke="#f97316" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M55 208h146" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity="0.9"/>
+</svg>

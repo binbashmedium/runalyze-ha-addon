@@ -13,40 +13,46 @@ Dieses Repository enthält ein Home-Assistant-Add-on für einen lokalen RUNALYZE
 
 5. Lade den Add-on-Store neu.
 6. Installiere **RUNALYZE Server**.
-7. Setze vor dem ersten Start sichere Datenbank-Passwörter in der Add-on-Konfiguration.
-8. Starte das Add-on und öffne die Web UI.
+7. Starte das Add-on und öffne die Web UI.
 
-## Externe MariaDB
+## MariaDB über Home Assistant Supervisor
 
-Version `0.1.7` verwendet keine interne MariaDB mehr. Das Add-on verbindet sich mit einer bestehenden MariaDB.
-
-Beispiel für das Home-Assistant-MariaDB-Add-on:
+Version `0.1.8` fordert den MySQL-Service beim Home-Assistant-Supervisor an:
 
 ```yaml
+hassio_api: true
+services:
+  - mysql:need
+```
+
+Dadurch holt das Add-on Host, Port, Benutzer und Passwort automatisch vom Supervisor, so wie andere Add-ons mit MariaDB-Servicebindung. Die Add-on-Optionen dienen als Fallback oder zur Auswahl der Datenbank.
+
+Empfohlene Konfiguration:
+
+```yaml
+db_use_supervisor_service: true
 db_host: core-mariadb
 db_port: 3306
 db_name: runalyze
-db_user: runalyze
-db_password: change_me
+db_user: service
+db_password: ""
 db_create: false
 ```
 
-Wenn Datenbank und Benutzer bereits existieren, `db_create: false` verwenden.
+Wenn `db_use_supervisor_service: true` gesetzt ist, kann `db_password` leer bleiben. Das Passwort kommt dann vom Supervisor-Service.
 
-Wenn der konfigurierte `db_user` das Recht `CREATE DATABASE` hat, kann `db_create: true` gesetzt werden. Das Add-on legt dann nur die Datenbank an. Es erstellt keinen Benutzer und benötigt keinen Root-Zugang.
+## Manuelle MariaDB-Konfiguration
 
-Benötigte Rechte für den RUNALYZE-Benutzer bei bereits vorhandener Datenbank:
+Nur verwenden, wenn keine Supervisor-Servicebindung genutzt werden soll:
 
-```sql
-GRANT ALL PRIVILEGES ON runalyze.* TO 'runalyze'@'%';
-FLUSH PRIVILEGES;
-```
-
-Optional, wenn der Benutzer die Datenbank selbst anlegen soll:
-
-```sql
-GRANT CREATE ON *.* TO 'runalyze'@'%';
-FLUSH PRIVILEGES;
+```yaml
+db_use_supervisor_service: false
+db_host: core-mariadb
+db_port: 3306
+db_name: runalyze
+db_user: service
+db_password: change_me
+db_create: false
 ```
 
 ## Update auf neue Version
@@ -55,9 +61,13 @@ Nach Änderungen im Repository:
 
 1. Add-on stoppen.
 2. In Home Assistant den Add-on-Store neu laden.
-3. **RUNALYZE Server** auf Version `0.1.7` aktualisieren oder neu bauen.
+3. **RUNALYZE Server** auf Version `0.1.8` aktualisieren oder neu bauen.
 4. Add-on starten.
 5. Im Log auf diese Meldungen prüfen:
+
+   `Reading MySQL service credentials from Home Assistant Supervisor`
+
+   `Using Supervisor MySQL service user ...`
 
    `External MariaDB connection OK`
 
@@ -65,7 +75,9 @@ Nach Änderungen im Repository:
 
 ## Technische Änderungen
 
-Version `0.1.7` entfernt die Root/Admin-Datenbankoptionen. `db_create` verwendet jetzt den konfigurierten `db_user`. Zusätzlich wurde ein Add-on-Icon unter `runalyze/icon.svg` hinzugefügt.
+Version `0.1.8` ergänzt `hassio_api: true`, `services: mysql:need` und liest die MySQL-Zugangsdaten über den Supervisor-Service-Endpunkt. Damit muss das MariaDB-Servicepasswort nicht mehr manuell eingetragen werden.
+
+Version `0.1.7` entfernt die Root/Admin-Datenbankoptionen. `db_create` verwendet den konfigurierten `db_user`. Zusätzlich wurde ein Add-on-Icon unter `runalyze/icon.svg` hinzugefügt.
 
 Version `0.1.6` entfernt den internen MariaDB-Server aus dem Container und schreibt RUNALYZE `data/config.yml` anhand der Add-on-Datenbankoptionen.
 

@@ -21,8 +21,6 @@ chown -R www-data:www-data "${RUNALYZE_DIR}/data" "${RUNALYZE_DIR}/var" "${RUNAL
 if [ -f /etc/runalyze-addon-build-info ]; then
   echo "RUNALYZE add-on build info:"
   cat /etc/runalyze-addon-build-info
-else
-  echo "RUNALYZE add-on build info file is missing"
 fi
 
 json_value() {
@@ -47,32 +45,22 @@ if [ -f "${CONFIG_PATH}" ]; then
   DB_USE_SUPERVISOR_SERVICE="$(json_value db_use_supervisor_service "${DB_USE_SUPERVISOR_SERVICE}")"
 fi
 
-echo "Configured DB user before Supervisor override: ${DB_USER}"
-
 if [ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ]; then
   if [ -z "${SUPERVISOR_TOKEN:-}" ]; then
-    echo "db_use_supervisor_service is true, but SUPERVISOR_TOKEN is not available. Check hassio_api: true in config.yaml." >&2
+    echo "db_use_supervisor_service is true, but SUPERVISOR_TOKEN is not available." >&2
     exit 1
   fi
-
   echo "Reading MySQL service credentials from Home Assistant Supervisor"
-  if curl -fsS -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" -H "Content-Type: application/json" "http://supervisor/services/mysql" >"${TMP_DIR}/mysql-service.json" 2>"${TMP_DIR}/mysql-service.err"; then
-    SERVICE_HOST="$(json_field "${TMP_DIR}/mysql-service.json" host)"
-    SERVICE_PORT="$(json_field "${TMP_DIR}/mysql-service.json" port)"
-    SERVICE_USER="$(json_field "${TMP_DIR}/mysql-service.json" username)"
-    SERVICE_PASSWORD="$(json_field "${TMP_DIR}/mysql-service.json" password)"
-
-    if [ -n "${SERVICE_HOST}" ]; then DB_HOST="${SERVICE_HOST}"; fi
-    if [ -n "${SERVICE_PORT}" ]; then DB_PORT="${SERVICE_PORT}"; fi
-    if [ -n "${SERVICE_USER}" ]; then DB_USER="${SERVICE_USER}"; fi
-    if [ -n "${SERVICE_PASSWORD}" ]; then DB_PASSWORD="${SERVICE_PASSWORD}"; fi
-
-    echo "Using Supervisor MySQL service user '${DB_USER}' at ${DB_HOST}:${DB_PORT}"
-  else
-    echo "Could not read Supervisor MySQL service credentials." >&2
-    cat "${TMP_DIR}/mysql-service.err" >&2 || true
-    exit 1
-  fi
+  curl -fsS -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" -H "Content-Type: application/json" "http://supervisor/services/mysql" >"${TMP_DIR}/mysql-service.json"
+  SERVICE_HOST="$(json_field "${TMP_DIR}/mysql-service.json" host)"
+  SERVICE_PORT="$(json_field "${TMP_DIR}/mysql-service.json" port)"
+  SERVICE_USER="$(json_field "${TMP_DIR}/mysql-service.json" username)"
+  SERVICE_PASSWORD="$(json_field "${TMP_DIR}/mysql-service.json" password)"
+  [ -n "${SERVICE_HOST}" ] && DB_HOST="${SERVICE_HOST}"
+  [ -n "${SERVICE_PORT}" ] && DB_PORT="${SERVICE_PORT}"
+  [ -n "${SERVICE_USER}" ] && DB_USER="${SERVICE_USER}"
+  [ -n "${SERVICE_PASSWORD}" ] && DB_PASSWORD="${SERVICE_PASSWORD}"
+  echo "Using Supervisor MySQL service user '${DB_USER}' at ${DB_HOST}:${DB_PORT}"
 else
   echo "Using configured database user '${DB_USER}' at ${DB_HOST}:${DB_PORT}"
 fi
@@ -94,19 +82,13 @@ validate_identifier "${DB_NAME}" "db_name"
 validate_identifier "${DB_USER}" "db_user"
 
 if [ -z "${DB_PASSWORD}" ]; then
-  echo "db_password is empty. Either set db_password or enable db_use_supervisor_service." >&2
+  echo "db_password is empty. Set db_password or enable db_use_supervisor_service." >&2
   exit 1
 fi
 
 if [ "${DB_CREATE}" = "true" ]; then
-  echo "Creating RUNALYZE database on ${DB_HOST}:${DB_PORT} with configured database user"
-  if ! mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" <<SQL
-CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-SQL
-  then
-    echo "Database creation failed. If the database already exists, set db_create: false. If not, grant CREATE DATABASE to ${DB_USER}." >&2
-    exit 1
-  fi
+  echo "Creating RUNALYZE database on ${DB_HOST}:${DB_PORT}"
+  mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 fi
 
 echo "Waiting for external MariaDB at ${DB_HOST}:${DB_PORT}"
@@ -118,7 +100,6 @@ for i in $(seq 1 60); do
   sleep 1
   if [ "$i" = "60" ]; then
     echo "Could not connect to external MariaDB as ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}" >&2
-    echo "Last MariaDB error:" >&2
     cat "${TMP_DIR}/mariadb-check.err" >&2 || true
     exit 1
   fi
@@ -126,24 +107,55 @@ done
 
 cat >"${RUNALYZE_DIR}/data/config.yml" <<EOF
 parameters:
+  locale: de
   database_host: '$(yaml_escape "${DB_HOST}")'
+  database_prefix: runalyze_
   database_port: ${DB_PORT}
   database_name: '$(yaml_escape "${DB_NAME}")'
   database_user: '$(yaml_escape "${DB_USER}")'
   database_password: '$(yaml_escape "${DB_PASSWORD}")'
-  database_prefix: runalyze_
   secret: '$(php -r 'echo bin2hex(random_bytes(24));')'
-  update_disabled: true
+  update_disabled: no
   user_can_register: true
-  user_disable_account_activation: true
+  user_disable_account_activation: false
   maintenance: false
+  garmin_api_key:
+  weather_proxy:
+  openweathermap_api_key:
+  meteostatnet_api_key:
+  darksky_api_key:
+  nokia_here_appid:
+  nokia_here_token:
+  thunderforest_api_key:
+  mapbox_api_key:
+  geonames_username:
+  perl_path: /usr/bin/perl
+  python3_path: /usr/bin/python3
+  rsvg_path: /usr/bin/rsvg-convert
+  inkscape_path:
+  ttbin_path: ../call/perl/ttbincnv
+  sqlite_mod_spatialite: libspatialite.so.5
+  mail_selfmail: true
+  mail_sender:
+  mail_name: runalyze
+  mail_localdomain: localhost
+  smtp_host:
+  smtp_port:
+  smtp_security:
+  smtp_username:
+  smtp_password:
+  backup_storage_period: 5
+  poster_storage_period: 5
   router.request_context.host: localhost
   router.request_context.scheme: http
   router.request_context.base_url:
+  osm_overpass_url: https://overpass.kumi.systems/api/interpreter
+  osm_overpass_proxy:
 EOF
 chown www-data:www-data "${RUNALYZE_DIR}/data/config.yml"
 chmod 600 "${RUNALYZE_DIR}/data/config.yml"
 
+echo "RUNALYZE database settings written to /data/database.txt"
 cat >/data/database.txt <<EOF
 Database host: ${DB_HOST}
 Database port: ${DB_PORT}
@@ -153,9 +165,24 @@ Database password source: $([ "${DB_USE_SUPERVISOR_SERVICE}" = "true" ] && echo 
 EOF
 chmod 600 /data/database.txt
 
-echo "RUNALYZE database settings written to /data/database.txt"
-echo "Starting Apache on port ${APACHE_PORT}"
+TABLE_COUNT="$(mariadb --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}' AND table_name LIKE 'runalyze_%';" 2>/dev/null || echo 0)"
+echo "RUNALYZE table count before migrations: ${TABLE_COUNT}"
+if [ "${TABLE_COUNT}" = "0" ]; then
+  echo "Running RUNALYZE database migrations"
+  if [ -x "${RUNALYZE_DIR}/bin/console" ]; then
+    su -s /bin/sh www-data -c "cd '${RUNALYZE_DIR}' && php bin/console doctrine:migrations:migrate --env=prod --no-debug --no-interaction"
+  elif [ -x "${RUNALYZE_DIR}/app/console" ]; then
+    su -s /bin/sh www-data -c "cd '${RUNALYZE_DIR}' && php app/console doctrine:migrations:migrate --env=prod --no-debug --no-interaction"
+  else
+    echo "No RUNALYZE console command found. Cannot initialize database schema." >&2
+    find "${RUNALYZE_DIR}" -maxdepth 3 -type f | sort | sed -n '1,200p' >&2
+    exit 1
+  fi
+else
+  echo "RUNALYZE database already contains tables, skipping migrations"
+fi
 
+echo "Starting Apache on port ${APACHE_PORT}"
 apache2ctl -D FOREGROUND &
 APACHE_PID=$!
 
@@ -165,21 +192,14 @@ for i in $(seq 1 30); do
     echo "RUNALYZE web server is reachable on port ${APACHE_PORT}"
     break
   fi
-  if ! kill -0 "${APACHE_PID}" 2>/dev/null; then
-    echo "Apache stopped unexpectedly" >&2
-    cat "${TMP_DIR}/runalyze-healthcheck.err" 2>/dev/null || true
-    exit 1
-  fi
   sleep 1
   if [ "$i" = "30" ]; then
     echo "Apache is running, but RUNALYZE returned HTTP ${HTTP_STATUS} within 30 seconds." >&2
-    echo "Last healthcheck transport error:" >&2
-    cat "${TMP_DIR}/runalyze-healthcheck.err" 2>/dev/null || true
     echo "Last healthcheck response body, first 200 lines:" >&2
     sed -n '1,200p' "${TMP_DIR}/runalyze-healthcheck.html" >&2 || true
     echo "RUNALYZE internal logs, last 200 lines:" >&2
-    find "${RUNALYZE_DIR}" -path '*/var/logs/*' -type f -print -exec sh -c 'echo "--- $1 ---" >&2; tail -n 200 "$1" >&2' sh {} \; 2>/dev/null || true
-    find "${RUNALYZE_DIR}" -path '*/app/logs/*' -type f -print -exec sh -c 'echo "--- $1 ---" >&2; tail -n 200 "$1" >&2' sh {} \; 2>/dev/null || true
+    find "${RUNALYZE_DIR}" -path '*/var/logs/*' -type f -exec sh -c 'echo "--- $1 ---" >&2; tail -n 200 "$1" >&2' sh {} \; 2>/dev/null || true
+    find "${RUNALYZE_DIR}" -path '*/app/logs/*' -type f -exec sh -c 'echo "--- $1 ---" >&2; tail -n 200 "$1" >&2' sh {} \; 2>/dev/null || true
   fi
 done
 

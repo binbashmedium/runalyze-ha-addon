@@ -3,6 +3,7 @@ set -euo pipefail
 
 CONFIG_PATH=/data/options.json
 MYSQL_DATA=/data/mysql
+INIT_MARKER=/data/.runalyze_db_initialized
 RUNALYZE_DIR=/var/www/runalyze
 
 DB_NAME="runalyze"
@@ -23,6 +24,7 @@ chown -R mysql:mysql /run/mysqld "${MYSQL_DATA}"
 if [ ! -d "${MYSQL_DATA}/mysql" ]; then
   echo "Initializing MariaDB data directory"
   mariadb-install-db --user=mysql --datadir="${MYSQL_DATA}" --skip-test-db >/dev/null
+  rm -f "${INIT_MARKER}"
 fi
 
 cat >/etc/mysql/mariadb.conf.d/99-runalyze.cnf <<EOF
@@ -52,13 +54,18 @@ for i in $(seq 1 60); do
   fi
 done
 
-mariadb --socket=/run/mysqld/mysqld.sock <<SQL
+if [ ! -f "${INIT_MARKER}" ]; then
+  mariadb --socket=/run/mysqld/mysqld.sock <<SQL
 ALTER USER 'root'@'localhost' IDENTIFIED BY '${DB_ROOT_PASSWORD}';
 CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';
 GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
 FLUSH PRIVILEGES;
 SQL
+  touch "${INIT_MARKER}"
+else
+  echo "MariaDB was already initialized, keeping existing database and users."
+fi
 
 if [ -d "${RUNALYZE_DIR}/var" ]; then
   chown -R www-data:www-data "${RUNALYZE_DIR}/var"
